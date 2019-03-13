@@ -2,6 +2,7 @@ package com.zh.netty.handler;
 
 import com.alibaba.fastjson.JSONObject;
 import com.zh.netty.biz.BaseBiz;
+import com.zh.netty.biz.BroadCastBiz;
 import com.zh.netty.biz.JoinBiz;
 import com.zh.netty.biz.PingBiz;
 import com.zh.netty.model.ResultCode;
@@ -41,6 +42,8 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     BaseBiz baseBiz;
     @Resource
     JoinBiz joinBiz;
+    @Resource
+    BroadCastBiz broadCastBiz;
     private static ChatHandler  chatHandler ;
 
     @PostConstruct //通过@PostConstruct实现初始化bean之前进行的操作
@@ -88,7 +91,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
                         baseBiz.sendMessage(incoming, resultObj);
                         return;
                     }
-//                    broadCastBiz.broadCast(data, allSocketClients);
+                    chatHandler.broadCastBiz.broadCast(data, allSocketClients, channelClient);
                     break;
                 }
                 default: {
