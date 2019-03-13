@@ -16,14 +16,11 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import io.netty.util.concurrent.ImmediateEventExecutor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Controller;
-
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,6 +32,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     //用于记录和管理所有客户端的channel，可以把相应的channel保存到一整个组中
     //DefaultChannelGroup：用于对应ChannelGroup，进行初始化
     private static ChannelGroup channelClient =  new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+    private static ChannelGroup group = new DefaultChannelGroup(ImmediateEventExecutor.INSTANCE);
     private static Map<String, WebSocketClient> allSocketClients = new ConcurrentHashMap<>();
     @Resource
     PingBiz pingBiz;
@@ -52,7 +50,7 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg){
         //text()获取从客户端发送过来的字符串
         String receiveMsg = msg.text();
         Channel incoming = ctx.channel();
@@ -106,42 +104,27 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
             chatHandler.baseBiz.sendMessage(incoming, resultObj);
 //            ctx.close();
         }
-
-
-        //针对channel进行发送，客户端对应的是channel
-        /**
-         * 方式一
-         */
-        for (Channel channel : channelClient) {
-            //循环对每一个channel对应输出即可（往缓冲区中写，写完之后再刷到客户端）
-            //注：writeAndFlush不可以使用String，因为传输的载体是一个TextWebSocketFrame，需要把消息通过载体再刷到客户端
-        //    channel.writeAndFlush(new TextWebSocketFrame("【服务器于 " + LocalDate.now() + "接收到消息：】 ，消息内容为：" + receiveMsg));
-        }
-        /**
-         * 方式二
-         */
-         /*channelClient.writeAndFlush(new TextWebSocketFrame("【服务器于 " + LocalDate.now() + "接收到消息：】 ，消息内容为：" +content));*/
-
-
     }
 
     //当客户端连接服务端（或者是打开连接之后）
     @Override
-    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+    public void handlerAdded(ChannelHandlerContext ctx){
         //获取客户端所对应的channel，添加到一个管理的容器中即可
-        System.out.println("【" + ctx.channel().id().asLongText() + "】进入了");
+        Channel incoming = ctx.channel();
+        group.add(incoming);
+        log.info("Client:" + incoming.remoteAddress().toString() + "加入,当前链接数：" + group.size());
         channelClient.add(ctx.channel());
     }
 
     //客户端断开
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+    public void handlerRemoved(ChannelHandlerContext ctx){
         //实际上是多余的，只要handler被移除，client会自动的把对应的channel移除掉
         channelClient.remove(ctx.channel());
         //每一而channel都会有一个长ID与短ID
-        //一开始channel就有了，系统会自动分配一串很长的字符串作为唯一的ID，如果使用asLongText()获取的ID是唯一的，asShortText()会把当前ID进行精简，精简过后可能会有重复
-        /*System.out.println("channel的长ID："+ctx.channel().id().asLongText());
-        System.out.println("channel的短ID："+ctx.channel().id().asShortText());*/
-        System.out.println("【" + ctx.channel().id().asLongText() + "】离开了");
+        Channel incoming = ctx.channel();
+        log.info("Client:" + incoming.remoteAddress().toString() + "离开,当前链接数：" + group.size());
+        allSocketClients.remove(incoming.remoteAddress().toString());
+        incoming.close();
     }
 }
